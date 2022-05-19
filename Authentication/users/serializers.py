@@ -1,3 +1,4 @@
+from attr import field
 from git import refresh
 from .models import Register 
 from rest_framework import serializers
@@ -93,3 +94,9 @@ class LogoutSerializer(serializers.Serializer):
     default_error_message = {
         'bad_token': ('Token is expired or invalid')
     } 
+
+
+class ResetPasswordEmailSentSerializers(serializers.Serializer):
+    email = serializers.EmailField()
+    class Meta:
+        field = ['email']

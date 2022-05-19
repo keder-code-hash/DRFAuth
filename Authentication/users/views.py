@@ -1,23 +1,36 @@
 from email.policy import HTTP
 from tokenize import Token
+from matplotlib.style import use
 from rest_framework.views import APIView
 from rest_framework.response import Response 
 from users.permissions import IsOwnerOrReadOnly
 from .models import Register
-from .serializers import UserSerializers,RegisterSerializers,RegisterUpdateSerializer,LoginSerializer,LogoutSerializer
+from .serializers import ResetPasswordEmailSentSerializers, UserSerializers,RegisterSerializers,RegisterUpdateSerializer,LoginSerializer,LogoutSerializer
 from rest_framework import serializers, status
 from rest_framework import generics
 from rest_framework import permissions 
 from django.core import serializers
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
+
+
+
+from django.core.mail import EmailMultiAlternatives
+from django.template import loader
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
+from django.contrib.sites.shortcuts import get_current_site
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+
 # permission class is set to authinticate or read only
 # persmiss
 class UserView(APIView): 
     def get(self,request,format=None):
         users=Register.objects.get(email__iexact="keder@gmail.com")
         # tok = users.tokens()
+        # curr_site = get_current_site(request=request).domain
+        # site_name = get_current_site(request=request).name
         return Response(UserSerializers(users,many=True).data) 
-        # return Response(tok) 
+        # return Response([curr_site]) 
 
 
 class RegisterView(APIView):
@@ -77,7 +90,46 @@ class LogOutView(APIView):
             msg = 'Successfully logged out'
         return Response(msg,status=status.HTTP_200_OK)
 
+########## sending email for resetting password #############
 
+def send_mail(subject_template_name, email_template_name,
+                  context, from_email, to_email, html_email_template_name=None):
+         
+        subject = loader.render_to_string(subject_template_name, context)
+        # Email subject *must not* contain newlines
+        subject = ''.join(subject.splitlines())
+        body = loader.render_to_string(email_template_name, context)
+
+        email_message = EmailMultiAlternatives(subject, body, from_email, [to_email])
+        if html_email_template_name is not None:
+            html_email = loader.render_to_string(html_email_template_name, context)
+            email_message.attach_alternative(html_email, 'text/html')
+
+        email_message.send()
+
+
+class SendResetPassEmail(generics.GenericAPIView):
+    serializer_class = ResetPasswordEmailSentSerializers
+    def post(self,request):
+        serializer = self.serializer_class(data = request.data)
+        email = request.data.get('email')
+
+        if Register.objects.filter(email__iexact=email).exists():
+            user = Register.objects.get(email__iexact = email)
+
+            # uidb64 = user id encoded in base 64
+            # "reset/<uidb64>/<token>/"
+
+            uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+            token  = PasswordResetTokenGenerator().make_token(user=user)
+            
+            # 127.0.0.1:8000
+            curr_site = get_current_site(request=request).domain
+            site_name = get_current_site(request=request).name
+
+
+
+#############################################################
 
 
 # whenever send a request from frontend to backend use ACCESS TOKEN , refresh can't be verified in backend
