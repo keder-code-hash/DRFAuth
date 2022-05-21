@@ -1,18 +1,22 @@
-from email.policy import HTTP
-from tokenize import Token
-from matplotlib.style import use
+from ast import Return
+import site
 from rest_framework.views import APIView
 from rest_framework.response import Response 
 from users.permissions import IsOwnerOrReadOnly
 from .models import Register
-from .serializers import ResetPasswordEmailSentSerializers, UserSerializers,RegisterSerializers,RegisterUpdateSerializer,LoginSerializer,LogoutSerializer
+from .serializers import ResetPasswordEmailSentSerializers, ResetPasswordSerializers, UserSerializers,RegisterSerializers,RegisterUpdateSerializer,LoginSerializer,LogoutSerializer
 from rest_framework import serializers, status
 from rest_framework import generics
 from rest_framework import permissions 
 from django.core import serializers
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 
+from django.urls import reverse_lazy
+from django.template.loader import get_template
+from django.core.mail import EmailMessage
 
+from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_decode
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 
 from django.core.mail import EmailMultiAlternatives
 from django.template import loader
@@ -21,11 +25,12 @@ from django.utils.http import urlsafe_base64_encode
 from django.contrib.sites.shortcuts import get_current_site
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 
+ 
 # permission class is set to authinticate or read only
 # persmiss
 class UserView(APIView): 
     def get(self,request,format=None):
-        users=Register.objects.get(email__iexact="keder@gmail.com")
+        users=Register.objects.all()
         # tok = users.tokens()
         # curr_site = get_current_site(request=request).domain
         # site_name = get_current_site(request=request).name
@@ -90,29 +95,31 @@ class LogOutView(APIView):
             msg = 'Successfully logged out'
         return Response(msg,status=status.HTTP_200_OK)
 
+
+
 ########## sending email for resetting password #############
 
 def send_mail(subject_template_name, email_template_name,
-                  context, from_email, to_email, html_email_template_name=None):
+                  context, from_email, to_email, message ,html_email_template_name=None):
          
-        subject = loader.render_to_string(subject_template_name, context)
-        # Email subject *must not* contain newlines
-        subject = ''.join(subject.splitlines())
-        body = loader.render_to_string(email_template_name, context)
+        mail = EmailMessage(
+                subject="Reset Password",
+                body=message,
+                from_email="kedernath.mallick.tint022@gmail.com",
+                to=["kedernath.mallick.tint022@gmail.com"],
+                reply_to=["kedernath.mallick.tint022@gmail.com"],
+            )
+        mail.content_subtype = "html"
+        mail.send() 
 
-        email_message = EmailMultiAlternatives(subject, body, from_email, [to_email])
-        if html_email_template_name is not None:
-            html_email = loader.render_to_string(html_email_template_name, context)
-            email_message.attach_alternative(html_email, 'text/html')
-
-        email_message.send()
-
-
-class SendResetPassEmail(generics.GenericAPIView):
+# just send the password reset email from django
+# contains the link 
+class SendResetPassEmail(APIView):
     serializer_class = ResetPasswordEmailSentSerializers
     def post(self,request):
         serializer = self.serializer_class(data = request.data)
-        email = request.data.get('email')
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data.get('email')
 
         if Register.objects.filter(email__iexact=email).exists():
             user = Register.objects.get(email__iexact = email)
@@ -127,6 +134,60 @@ class SendResetPassEmail(generics.GenericAPIView):
             curr_site = get_current_site(request=request).domain
             site_name = get_current_site(request=request).name
 
+            url = reverse_lazy("password_reset_confirm",kwargs={
+                "uidb64" : uidb64,
+                "token" :token
+            })
+
+            final_password_reset_link = curr_site+str(url)
+
+            subject_template_name = "email/password_reset_subject.txt"
+            email_template_name = None
+            from_email = "kedernath.mallick.tint022@gmail.com"
+            to_email = email
+            html_email_template_name="email/reset_pass.html"
+
+
+            context = {
+                    "resetPass_url" : final_password_reset_link
+                }
+            message = get_template("email/reset_pass.html").render(context)
+
+            send_mail(subject_template_name, email_template_name,
+                  context, from_email, to_email, html_email_template_name , message )
+
+
+        return Response({"final_link" : final_password_reset_link},status=status.HTTP_200_OK)
+
+
+class ResetPassTODB(APIView):
+    serializer_class = ResetPasswordSerializers
+
+    def get_user(self, uidb64):
+        try: 
+            uid = urlsafe_base64_decode(uidb64).decode()
+            user = Register._default_manager.get(pk=uid)
+        except (
+            TypeError,
+            ValueError,
+            OverflowError,
+            Register.DoesNotExist,
+            ValidationError,
+        ):
+            user = None
+        return user
+    def post(self,request,*args,**kwargs):
+
+        serializer = self.serializer_class(data = request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uidb64 = kwargs.get("uidb64")
+        token = kwargs.get("token")
+
+        user = self.get_user(uidb64)
+        serializer.save(user)
+        
+        return Response(RegisterSerializers(self.get_user(uidb64)).data, status = status.HTTP_200_OK)
 
 
 #############################################################

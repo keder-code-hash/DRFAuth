@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import UserView,RegisterView,LogInView,LogOutView
+from .views import ResetPassTODB, UserView,RegisterView,LogInView,LogOutView,SendResetPassEmail
 
 from rest_framework.authtoken import views
 from rest_framework_simplejwt import views as jwt_views
@@ -39,7 +39,7 @@ urlpatterns=[
         views.PasswordChangeDoneView.as_view(),
         name="password_change_done",
     ),
-    path("password_reset/", views.PasswordResetView.as_view(), name="password_reset"),
+    path("password_reset/", SendResetPassEmail.as_view(), name="password_reset"),
 
     
     path(
@@ -49,13 +49,12 @@ urlpatterns=[
     ),
     path(
         "reset/<uidb64>/<token>/",
-        views.PasswordResetConfirmView.as_view(),
+        ResetPassTODB.as_view(),
         name="password_reset_confirm",
     ),
     path(
         "reset/done/",
         views.PasswordResetCompleteView.as_view(),
         name="password_reset_complete",
-    ),
-
+    ), 
 ]
