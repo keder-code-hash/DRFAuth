@@ -27,7 +27,7 @@ from django.contrib.auth.tokens import PasswordResetTokenGenerator
 
  
 # permission class is set to authinticate or read only
-# persmiss
+# persmission
 class UserView(APIView): 
     def get(self,request,format=None):
         users=Register.objects.all()
@@ -37,6 +37,9 @@ class UserView(APIView):
         return Response(UserSerializers(users,many=True).data) 
         # return Response([curr_site]) 
 
+
+
+############## Register View ##############################
 
 class RegisterView(APIView):
     # permission_classes = [IsAuthenticated]
@@ -64,6 +67,7 @@ class RegisterView(APIView):
         else: 
             return Response("User does not exist",status.HTTP_400_BAD_REQUEST)
 
+############## LogIn & LogOut View ##############################
 
 class LogInView(generics.GenericAPIView):
     serializer_class = LoginSerializer
@@ -80,9 +84,6 @@ class LogInView(generics.GenericAPIView):
         # serialized_user_data.is_valid(raise_exception=True)
         return Response(serializers_data.data,status=status.HTTP_200_OK)
 
-
-
-
 class LogOutView(APIView):
     serializer_class = LogoutSerializer
     def post(self,request,format=None):
@@ -95,9 +96,7 @@ class LogOutView(APIView):
             msg = 'Successfully logged out'
         return Response(msg,status=status.HTTP_200_OK)
 
-
-
-########## sending email for resetting password #############
+########## Password Reset #############
 
 def send_mail(subject_template_name, email_template_name,
                   context, from_email, to_email, message ,html_email_template_name=None):
@@ -159,7 +158,6 @@ class SendResetPassEmail(APIView):
 
         return Response({"final_link" : final_password_reset_link},status=status.HTTP_200_OK)
 
-
 class ResetPassTODB(APIView):
     serializer_class = ResetPasswordSerializers
 
@@ -188,7 +186,6 @@ class ResetPassTODB(APIView):
         serializer.save(user)
         
         return Response(RegisterSerializers(self.get_user(uidb64)).data, status = status.HTTP_200_OK)
-
 
 #############################################################
 
